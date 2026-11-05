@@ -10,3 +10,4 @@ submission*.json
 .DS_Store
 paper_ledger.json
 RULES_CHECKLIST.md
+video/
