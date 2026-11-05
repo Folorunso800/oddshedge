@@ -5,15 +5,19 @@ signer (v1.signer) for a given derivation path. It only READS the MPC root publi
 key over public RPC and does elliptic-curve math locally. It never signs, never
 holds a private key and never sends a transaction.
 
-Derivation (NEAR MPC v1, as in near/chainsig.js):
+Derivation (NEAR MPC v1, as in near/chainsig.js; cross-checked against chainsig.js
+deriveChildPublicKey on 2026-11-05, see tests/test_chainsig.py):
   epsilon = sha3_256("near-mpc-recovery v0.1.0 epsilon derivation:" + account + "," + path)
   child_pub = root_pub + epsilon * G   (secp256k1)
   evm_address = keccak256(child_pub_xy)[-20:]
 """
 import hashlib, json, urllib.request, base64
 
-RPC = "https://rpc.mainnet.near.org"
-SIGNER = "v1.signer"
+NETWORKS = {  # MPC signer contract per network (see docs.near.org/chain-abstraction/chain-signatures)
+    "mainnet": {"rpc": "https://rpc.mainnet.near.org", "signer": "v1.signer"},
+    "testnet": {"rpc": "https://rpc.testnet.near.org", "signer": "v1.signer-prod.testnet"},
+}
+RPC, SIGNER = NETWORKS["mainnet"]["rpc"], NETWORKS["mainnet"]["signer"]
 P = 2**256 - 2**32 - 977
 N = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141
 G = (0x79BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798,
@@ -72,17 +76,21 @@ def keccak256(data):
         s = _f(s)
     return b"".join(s[i % 5][i // 5].to_bytes(8, "little") for i in range(4))
 
-def mpc_root_key():
+def parse_root(key):
+    raw = b58decode(key.split(":", 1)[1])
+    return int.from_bytes(raw[:32], "big"), int.from_bytes(raw[32:], "big")
+
+def mpc_root_key(network="mainnet"):
+    net = NETWORKS[network]
     body = {"jsonrpc": "2.0", "id": 1, "method": "query", "params": {"request_type": "call_function",
-            "finality": "final", "account_id": SIGNER, "method_name": "public_key", "args_base64": "e30="}}
-    r = urllib.request.Request(RPC, data=json.dumps(body).encode(), headers={"Content-Type": "application/json"})
+            "finality": "final", "account_id": net["signer"], "method_name": "public_key", "args_base64": "e30="}}
+    r = urllib.request.Request(net["rpc"], data=json.dumps(body).encode(), headers={"Content-Type": "application/json"})
     res = json.load(urllib.request.urlopen(r, timeout=20))["result"]["result"]
     key = json.loads(bytes(res).decode())
-    raw = b58decode(key.split(":", 1)[1])
-    return key, (int.from_bytes(raw[:32], "big"), int.from_bytes(raw[32:], "big"))
+    return key, parse_root(key)
 
-def derive_evm_address(account_id, path, root=None):
-    if root is None: _, root = mpc_root_key()
+def derive_evm_address(account_id, path, root=None, network="mainnet"):
+    if root is None: _, root = mpc_root_key(network)
     eps = int.from_bytes(hashlib.sha3_256(
         f"near-mpc-recovery v0.1.0 epsilon derivation:{account_id},{path}".encode()).digest(), "big")
     child = _add(root, _mul(eps, G))
@@ -93,4 +101,5 @@ if __name__ == "__main__":
     assert keccak256(b"").hex() == "c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470"
     acct = sys.argv[1] if len(sys.argv) > 1 else "oddshedge-demo.near"
     path = sys.argv[2] if len(sys.argv) > 2 else "hyperliquid-1"
-    print(derive_evm_address(acct, path))
+    network = sys.argv[3] if len(sys.argv) > 3 else ("testnet" if acct.endswith(".testnet") else "mainnet")
+    print(derive_evm_address(acct, path, network=network))
