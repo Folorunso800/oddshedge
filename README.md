@@ -3,6 +3,9 @@
 Built at **NEAR HACKATHON** (Nov 2026). Tracks: `defi`, `agents`.
 **Paper trading only.** No private keys, no wallet, no orders. Nothing is signed or sent on-chain.
 
+## Other NEAR Hackathon entry by the same builder
+The same builder (Mari, GitHub Folorunso800) has a second, separate NEAR Hackathon entry: **ScamBrake**, https://github.com/Folorunso800/scambrake. It is a guard contract on NEAR testnet that limits what an AI agent can pay. The two projects share no code.
+
 ## The problem
 Polymarket and Kalshi run markets like "Will Bitcoin be above $78,000 on Nov 9?". The perp market on Hyperliquid (price plus volatility) implies its own odds for the same question, and the two often disagree. A trader who spots the gap still has two problems:
 1. **Direction risk.** Buying YES is also a bet that the coin goes up.
